@@ -1,0 +1,16 @@
+🧩 Use Cases of Cookies
+Use Case	Why Use Cookies?
+✅ Authentication (sessions/tokens)	Store access_token, session ID
+🌍 Remember user preferences	Language, theme
+🛒 Shopping carts	Track items added
+📊 Analytics tracking	Track repeat visits
+🎫 CSRF protection	Send CSRF token via cook
+
+
+✅ Why Use Cookies?
+Feature	Benefit
+🧠 Stored on browser	Persistent across page reloads
+🔒 Can be secure	Use Secure, SameSite, HttpOnly, etc.
+🔄 Sent automatically	Browser sends cookie with every request (useful for session/auth)
+🎯 Domain-scoped	You control where they’re sent
+🕓 Support expiration	Can be short-lived or persistent

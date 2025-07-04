@@ -1,7 +1,7 @@
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiError } from "../utils/ApiError.js";
 import { User } from "../models/user.models.js";
-import { uploadOnCloudinary } from "../utils/cloudinary.js";
+import { uploadOnCloudinary ,deleteFromCloudinary} from "../utils/cloudinary.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { application, response } from "express";
 import jwt from "jsonwebtoken";
@@ -83,7 +83,9 @@ const registerUser = asyncHandler(async (req, res) => {
   const user = await User.create({
     fullName,
     avatar: avatar.url,
-    coverImage: coverImage?.urln || "",
+    avatarPublicId:avatar?.public_id,
+    coverImage: coverImage?.url || "",
+    coverImagePublicId:coverImage?.public_id,
     email,
     password,
     username: username.toLowerCase(),
@@ -111,10 +113,10 @@ const loginUser = asyncHandler(async (req, res) => {
   //access and refresh token
   //send cookie
 
-  console.log("--- Inside loginUser Controller (Attempting JSON Parsing) ---");
-  console.log("Request Headers:", req.headers); // Check 'content-type'
-  console.log("Request Body:", req.body); // This should now show your JSON data
-  console.log("--- End Debug ---");
+  // console.log("--- Inside loginUser Controller (Attempting JSON Parsing) ---");
+  // console.log("Request Headers:", req.headers); // Check 'content-type'
+  // console.log("Request Body:", req.body); // This should now show your JSON data
+  // console.log("--- End Debug ---");
 
   const { email, username, password } = req.body;
 
@@ -128,7 +130,7 @@ const loginUser = asyncHandler(async (req, res) => {
     $or: [{ username }, { email }],
   });
 
-  console.log(user);
+  // console.log(user);
 
   if (!user) {
     throw new ApiError(404, "user doesnt exist");
@@ -148,12 +150,14 @@ const loginUser = asyncHandler(async (req, res) => {
     "-password -refreshToken"
   );
 
+
+
+  // Cookies are small pieces of data that the server sends to the client (browser), and the browser stores them and sends them back with every request to the same domain.
   const options = {
-    httpOnly: true,
-    secure: true,
-    //secure true makes the cookie only server modifiable , frontend cant modify it then
+    httpOnly: true,//HttpOnly is a flag you set on a cookie to prevent JavaScript on the client side from accessing it.
+    secure: true,//secure true makes the cookie only server modifiable , frontend cant modify it then
   };
-  console.log(res);
+  // console.log(res);
 
   return res
     .status(200)
@@ -304,40 +308,51 @@ const updateUserAvatar = asyncHandler(async (req, res) => {
 
   const avatar = await uploadOnCloudinary(avatarLocalPath);
 
-  if (!avatar.url) {
+  if (!avatar.url || !avatar.public_id) {
     throw new ApiError(400, "Error while uploading on avatar");
   }
+
+  const oldPublicId=req.user?.avatarPublicId;
 
   const user = await User.findByIdAndUpdate(
     req.user?._id,
     {
       $set: {
         avatar: avatar.url,
+        avatarPublicId:avatar.public_id
       },
     },
     { new: true }
   ).select("-password");
 
+  const result = await deleteFromCloudinary(oldPublicId);
+  
+  if (!result || result.result !== "ok") {
+    throw new ApiError(500, "Failed to delete the old file from Cloudinary");
+  }
+  
   return res
-    .status(200)
-    .json(new ApiResponse(200, user, "Avatar image updated successfully"));
+  .status(200)
+  .json(new ApiResponse(200, user, "Avatar image updated successfully"));
 });
 
 const updateUserCoverImage = asyncHandler(async (req, res) => {
   const coverImageLocalPath = req.file?.path;
-
+  
   if (!coverImageLocalPath) {
     throw new ApiError(400, "Cover image file is missing");
   }
-
+  
   //TODO: delete old image - assignment
-
+  
   const coverImage = await uploadOnCloudinary(coverImageLocalPath);
-
+  
   if (!coverImage.url) {
     throw new ApiError(400, "Error while uploading on avatar");
   }
-
+  
+  const oldPublicId=req.user?.coverImagePublicId;
+  
   const user = await User.findByIdAndUpdate(
     req.user?._id,
     {
@@ -347,7 +362,15 @@ const updateUserCoverImage = asyncHandler(async (req, res) => {
     },
     { new: true }
   ).select("-password");
+  
+  if(oldPublicId)
+  {
+    const result = await deleteFromCloudinary(oldPublicId);
+     if (!result || result.result !== "ok") {
+      console.log("Old cover image could not be deleted from Cloudinary.");
+    }
 
+  }
   return res
     .status(200)
     .json(new ApiResponse(200, user, "Cover image updated successfully"));
@@ -355,7 +378,7 @@ const updateUserCoverImage = asyncHandler(async (req, res) => {
 
 const getUserChannelProfile = asyncHandler(async (req, res) => {
   const { username } = req.params;
-  if (!username?.trim) {
+  if (!username?.trim()) {
     throw new ApiError(400, "Username is missing");
   }
   // User.find({username})
@@ -365,7 +388,7 @@ const getUserChannelProfile = asyncHandler(async (req, res) => {
     {
       $match: {
         username: username?.toLowerCase(),
-      },
+      }
     },
     //pipeline 2 --- counting subscribers number through channel
     {
