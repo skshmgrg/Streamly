@@ -4,7 +4,7 @@ import {User} from "../models/user.models.js"
 import {ApiError} from "../utils/ApiError.js"
 import {ApiResponse} from "../utils/ApiResponse.js"
 import {asyncHandler} from "../utils/asyncHandler.js"
-import {uploadOnCloudinary} from "../utils/cloudinary.js"
+import {uploadOnCloudinary,deleteFromCloudinary} from "../utils/cloudinary.js"
 
 
 const getAllVideos = asyncHandler(async (req, res) => {
@@ -54,8 +54,9 @@ const getAllVideos = asyncHandler(async (req, res) => {
       $project: {
         title: 1,
         description: 1,
+        videoFile:1,
+        thumbnail:1,
         views: 1,
-        tags: 1,
         createdAt: 1,
         "owner._id": 1,
         "owner.username": 1,
@@ -127,7 +128,6 @@ const getVideoById = asyncHandler(async (req, res) => {
   res.status(200).json(new ApiResponse(200, video, "Video fetched successfully"));
 });
 
-
 const updateVideo = asyncHandler(async (req, res) => {
   const { videoId } = req.params;
   const { title, description } = req.body;
@@ -142,6 +142,10 @@ const updateVideo = asyncHandler(async (req, res) => {
     throw new ApiError(404, "Video not found");
   }
 
+  if (video.owner.toString() !== req.user._id.toString()) {
+    throw new ApiError(403, "You are not authorized to update this video");
+  }
+
   if (title) video.title = title;
   if (description) video.description = description;
 
@@ -152,7 +156,7 @@ const updateVideo = asyncHandler(async (req, res) => {
     }
 
     if (video.thumbnailPublicId) {
-      const result = await deleteFromCloudinary(video.thumbnailPublicId);
+      const result = await deleteFromCloudinary(video.thumbnailPublicId, "image");
       if (!result || result.result !== "ok") {
         throw new ApiError(500, "Failed to delete the old thumbnail from Cloudinary");
       }
@@ -166,7 +170,6 @@ const updateVideo = asyncHandler(async (req, res) => {
   res.status(200).json(new ApiResponse(200, updatedVideo, "Video updated successfully"));
 });
 
-
 const deleteVideo = asyncHandler(async (req, res) => {
   const { videoId } = req.params;
 
@@ -179,16 +182,20 @@ const deleteVideo = asyncHandler(async (req, res) => {
     throw new ApiError(404, "Video not found");
   }
 
+  if (video.owner.toString() !== req.user._id.toString()) {
+    throw new ApiError(403, "You are not authorized to delete this video");
+  }
+
   // Delete thumbnail from Cloudinary if exists
   if (video.thumbnailPublicId) {
-    const result = await deleteFromCloudinary(video.thumbnailPublicId);
+    const result = await deleteFromCloudinary(video.thumbnailPublicId,"image");
     if (!result || result.result !== "ok") {
       throw new ApiError(500, "Failed to delete thumbnail from Cloudinary");
     }
   }
   
   if (video.videoPublicId) {
-    const result =await deleteFromCloudinary(video.videoPublicId);
+    const result =await deleteFromCloudinary(video.videoPublicId,"video");
     if (!result || result.result !== "ok") {
       throw new ApiError(500, "Failed to delete video from Cloudinary");
     }
@@ -212,6 +219,10 @@ const togglePublishStatus = asyncHandler(async (req, res) => {
   const video = await Video.findById(videoId);
   if (!video) {
     throw new ApiError(404, "Video not found");
+  }
+
+  if (video.owner.toString() !== req.user._id.toString()) {
+    throw new ApiError(403, "You are not authorized to alter this video's publish status");
   }
 
   const updatedVideo = await Video.findByIdAndUpdate(

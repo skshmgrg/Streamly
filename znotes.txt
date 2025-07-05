@@ -14,3 +14,6 @@ Feature	Benefit
 🔄 Sent automatically	Browser sends cookie with every request (useful for session/auth)
 🎯 Domain-scoped	You control where they’re sent
 🕓 Support expiration	Can be short-lived or persistent
+
+
+in mongoDb , database name is test and it has several collections like videos users tweets etc .
